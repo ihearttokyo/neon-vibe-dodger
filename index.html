@@ -1,0 +1,1393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>NEON VIBE: CYBER RUNNER</title>
+  
+  <!-- SEO Tags -->
+  <meta name="description" content="A premium 3D synthwave tunnel dodge game built with Three.js and procedural Web Audio. Fully responsive with an epilepsy-safe visual harness.">
+  
+  <!-- Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&family=Orbitron:wght@400;700;900&display=swap" rel="stylesheet">
+  
+  <!-- Three.js -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+
+  <style>
+    :root {
+      --magenta: #ff007f;
+      --cyan: #00f0ff;
+      --purple: #9d00ff;
+      --bg-dark: #03001e;
+      --bg-light: #7303c0;
+      --glass-bg: rgba(10, 10, 25, 0.7);
+      --glass-border: rgba(0, 240, 255, 0.25);
+    }
+
+    * {
+      box-sizing: border-box;
+      user-select: none;
+      margin: 0;
+      padding: 0;
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background-color: var(--bg-dark);
+      font-family: 'Inter', sans-serif;
+      color: #fff;
+      touch-action: none;
+    }
+
+    #game-canvas {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 1;
+      display: block;
+    }
+
+    /* Glassmorphism UI Wrappers */
+    .screen-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      z-index: 10;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(circle at center, rgba(15, 10, 35, 0.4) 0%, rgba(3, 0, 30, 0.85) 100%);
+      transition: opacity 0.5s ease;
+    }
+
+    .hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .glass-card {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 20px;
+      padding: 40px;
+      max-width: 500px;
+      width: 90%;
+      text-align: center;
+      backdrop-filter: blur(20px) saturate(180%);
+      -webkit-backdrop-filter: blur(20px) saturate(180%);
+      box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), 
+                  0 0 30px rgba(255, 0, 127, 0.15), 
+                  inset 0 0 15px rgba(0, 240, 255, 0.05);
+      animation: cardPulse 8s infinite alternate ease-in-out;
+    }
+
+    @keyframes cardPulse {
+      0% { box-shadow: 0 10px 40px rgba(0,0,0,0.5), 0 0 20px rgba(255,0,127,0.1); border-color: rgba(0, 240, 255, 0.2); }
+      100% { box-shadow: 0 10px 40px rgba(0,0,0,0.6), 0 0 45px rgba(0,240,255,0.25); border-color: rgba(255, 0, 127, 0.4); }
+    }
+
+    h1.game-title {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 3rem;
+      letter-spacing: 4px;
+      margin-bottom: 25px;
+      background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 50%, var(--purple) 100%);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      text-shadow: 0 0 30px rgba(0, 240, 255, 0.3);
+      text-transform: uppercase;
+    }
+
+    h2.section-title {
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 700;
+      color: var(--cyan);
+      margin-bottom: 15px;
+      letter-spacing: 2px;
+    }
+
+    p.tagline {
+      font-size: 0.95rem;
+      color: rgba(255, 255, 255, 0.7);
+      line-height: 1.6;
+      margin-bottom: 30px;
+    }
+
+    /* Form & Controls Controls */
+    .control-row {
+      display: flex;
+      flex-direction: column;
+      gap: 15px;
+      margin-bottom: 30px;
+      text-align: left;
+    }
+
+    .form-group {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      background: rgba(255, 255, 255, 0.04);
+      padding: 12px 20px;
+      border-radius: 12px;
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      transition: background 0.3s;
+    }
+
+    .form-group:hover {
+      background: rgba(255, 255, 255, 0.08);
+    }
+
+    .form-label {
+      font-size: 0.85rem;
+      font-weight: 600;
+      color: #dfdfef;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+    }
+
+    .form-desc {
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.45);
+      margin-top: 2px;
+    }
+
+    /* Neon Cyber Toggle Switches */
+    .switch {
+      position: relative;
+      display: inline-block;
+      width: 46px;
+      height: 24px;
+    }
+
+    .switch input {
+      opacity: 0;
+      width: 0;
+      height: 0;
+    }
+
+    .slider {
+      position: absolute;
+      cursor: pointer;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: #33334f;
+      transition: .4s;
+      border-radius: 34px;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .slider:before {
+      position: absolute;
+      content: "";
+      height: 16px;
+      width: 16px;
+      left: 3px;
+      bottom: 3px;
+      background-color: white;
+      transition: .4s;
+      border-radius: 50%;
+      box-shadow: 0 0 5px rgba(255, 255, 255, 0.5);
+    }
+
+    input:checked + .slider {
+      background-color: var(--cyan);
+      box-shadow: 0 0 10px rgba(0, 240, 255, 0.6);
+      border-color: rgba(0, 240, 255, 0.5);
+    }
+
+    input:checked + .slider:before {
+      transform: translateX(22px);
+      background-color: #03001e;
+    }
+
+    /* Cyber Button styling */
+    .btn-cyber {
+      background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%);
+      color: #000;
+      font-family: 'Orbitron', sans-serif;
+      font-weight: 900;
+      font-size: 1.1rem;
+      letter-spacing: 2px;
+      padding: 16px 32px;
+      border: none;
+      border-radius: 12px;
+      cursor: pointer;
+      width: 100%;
+      text-transform: uppercase;
+      box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);
+      transition: all 0.3s cubic-bezier(0.25, 0.8, 0.25, 1);
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-cyber:hover {
+      box-shadow: 0 0 35px rgba(255, 0, 127, 0.7);
+      transform: scale(1.02);
+      color: #fff;
+    }
+
+    .btn-cyber:active {
+      transform: scale(0.98);
+    }
+
+    /* Scoreboard HUD overlay */
+    #hud {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      right: 20px;
+      z-index: 5;
+      display: flex;
+      justify-content: space-between;
+      pointer-events: none;
+      font-family: 'Orbitron', sans-serif;
+      transition: opacity 0.3s;
+    }
+
+    .hud-element {
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 12px;
+      padding: 10px 20px;
+      backdrop-filter: blur(10px);
+      -webkit-backdrop-filter: blur(10px);
+      display: flex;
+      flex-direction: column;
+      box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+    }
+
+    .hud-label {
+      font-size: 0.65rem;
+      color: rgba(255, 255, 255, 0.5);
+      letter-spacing: 1px;
+      text-transform: uppercase;
+    }
+
+    .hud-value {
+      font-size: 1.5rem;
+      font-weight: 900;
+      color: var(--cyan);
+      text-shadow: 0 0 8px rgba(0, 240, 255, 0.5);
+    }
+
+    #multiplier-badge {
+      color: var(--magenta);
+      text-shadow: 0 0 8px rgba(255, 0, 127, 0.5);
+      margin-left: 10px;
+    }
+
+    #near-miss-indicator {
+      position: absolute;
+      left: 50%;
+      top: 100px;
+      transform: translateX(-50%);
+      font-size: 1.8rem;
+      font-weight: 900;
+      color: var(--magenta);
+      text-shadow: 0 0 15px var(--magenta);
+      opacity: 0;
+      transition: transform 0.2s ease-out, opacity 0.2s ease-out;
+      pointer-events: none;
+    }
+
+    .near-miss-animate {
+      animation: nearMissPulse 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards;
+    }
+
+    @keyframes nearMissPulse {
+      0% { opacity: 0; transform: translate(-50%, -20px) scale(0.7); }
+      20% { opacity: 1; transform: translate(-50%, 0) scale(1.1); }
+      70% { opacity: 1; transform: translate(-50%, 0) scale(1); }
+      100% { opacity: 0; transform: translate(-50%, 20px) scale(0.8); }
+    }
+
+    /* Epilepsy Safe indicator badge */
+    #safety-badge {
+      position: absolute;
+      bottom: 20px;
+      right: 20px;
+      z-index: 5;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.65rem;
+      background: rgba(10, 240, 100, 0.15);
+      border: 1px solid rgba(10, 240, 100, 0.4);
+      padding: 6px 12px;
+      border-radius: 6px;
+      color: #55ff88;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Key indicator overlays */
+    #controls-tip {
+      position: absolute;
+      bottom: 25px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 5;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      padding: 8px 16px;
+      border-radius: 8px;
+      font-size: 0.75rem;
+      color: rgba(255, 255, 255, 0.6);
+      pointer-events: none;
+      text-align: center;
+      transition: opacity 0.5s;
+    }
+
+    .key-badge {
+      background: rgba(255, 255, 255, 0.15);
+      border: 1px solid rgba(255, 255, 255, 0.3);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: monospace;
+      color: #fff;
+    }
+
+    /* Custom scrollbar just in case */
+    ::-webkit-scrollbar {
+      width: 6px;
+    }
+    ::-webkit-scrollbar-track {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    ::-webkit-scrollbar-thumb {
+      background: var(--cyan);
+      border-radius: 3px;
+    }
+
+    /* Context lost message overlay */
+    #context-lost-screen {
+      display: none;
+      flex-direction: column;
+      z-index: 100;
+    }
+
+    #context-lost-screen.active {
+      display: flex;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- Canvas for WebGL -->
+  <canvas id="game-canvas" width="1" height="1"></canvas>
+
+  <!-- HUD overlay -->
+  <div id="hud" class="hidden">
+    <div class="hud-element" id="score-container">
+      <span class="hud-label">Score</span>
+      <span class="hud-value" id="score-value">00000</span>
+    </div>
+    <div class="hud-element" id="multiplier-container">
+      <span class="hud-label">Speed Level</span>
+      <span class="hud-value" id="speed-level">1.0x<span id="multiplier-badge">x1</span></span>
+    </div>
+  </div>
+
+  <div id="near-miss-indicator">NEAR MISS! +250</div>
+  <div id="safety-badge">SAFE MODE ACTIVE</div>
+
+  <div id="controls-tip" class="hidden">
+    USE <span class="key-badge">A</span> / <span class="key-badge">D</span> OR <span class="key-badge">←</span> / <span class="key-badge">→</span> TO DODGE
+  </div>
+
+  <!-- Screen 1: Start/Intro Overlay -->
+  <div id="start-screen" class="screen-overlay">
+    <div class="glass-card">
+      <h1 class="game-title">Neon Vibe</h1>
+      <p class="tagline">Navigate the hyper-speed rotating neon tunnel and dodge intense space obstacles in a pure synthwave flow state.</p>
+      
+      <div class="control-row">
+        <!-- Epilepsy Toggle -->
+        <div class="form-group">
+          <div>
+            <div class="form-label">Safe Visual Mode</div>
+            <div class="form-desc">Disables intense strobes & flashy color changes</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-safety" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Audio Toggle -->
+        <div class="form-group">
+          <div>
+            <div class="form-label">Procedural Synth Audio</div>
+            <div class="form-desc">Synthesized retro beats & 80s bass loops</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-audio" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+
+        <!-- Control Type Toggle -->
+        <div class="form-group">
+          <div>
+            <div class="form-label">Mouse Control Mode</div>
+            <div class="form-desc">Fly with cursor inside the tunnel</div>
+          </div>
+          <label class="switch">
+            <input type="checkbox" id="toggle-mouse" checked>
+            <span class="slider"></span>
+          </label>
+        </div>
+      </div>
+
+      <button id="btn-start" class="btn-cyber">Start Engine</button>
+    </div>
+  </div>
+
+  <!-- Screen 2: Game Over Screen -->
+  <div id="game-over-screen" class="screen-overlay hidden">
+    <div class="glass-card" style="border-color: var(--magenta);">
+      <h1 class="game-title" style="background: linear-gradient(135deg, var(--magenta) 0%, var(--purple) 100%); -webkit-background-clip: text;">System Crash</h1>
+      <p class="tagline">Your vessel collided with a hyper-space prism. System failure imminent.</p>
+      
+      <div class="control-row" style="margin-bottom: 25px;">
+        <div class="form-group" style="justify-content: space-between;">
+          <span class="form-label" style="color: var(--cyan);">Final Score</span>
+          <span class="hud-value" id="final-score" style="color: #fff;">0</span>
+        </div>
+        <div class="form-group" style="justify-content: space-between;">
+          <span class="form-label" style="color: var(--magenta);">Best Attempt</span>
+          <span class="hud-value" id="high-score" style="color: var(--magenta);">0</span>
+        </div>
+      </div>
+
+      <button id="btn-restart" class="btn-cyber" style="background: linear-gradient(135deg, var(--magenta) 0%, var(--purple) 100%); box-shadow: 0 0 20px rgba(255, 0, 127, 0.4);">Reboot System</button>
+    </div>
+  </div>
+
+  <!-- Context Lost Overlay -->
+  <div id="context-lost-screen" class="screen-overlay">
+    <div class="glass-card" style="border-color: var(--magenta);">
+      <h1 class="game-title">Graphics Reset</h1>
+      <p class="tagline">Your WebGL graphics context was lost due to GPU resource limits.</p>
+      <button id="btn-reload" class="btn-cyber">Reinitialize</button>
+    </div>
+  </div>
+
+  <!-- Procedural audio synthesis code & Game Core -->
+  <script>
+    // Game state
+    const STATE = {
+      score: 0,
+      highScore: 0,
+      speedLevel: 1.0,
+      obstacleSpeed: 95, // Units per second base
+      obstaclesPassedCount: 0,
+      spawnTimer: 0,
+      spawnInterval: 1.8, // Spawning waves every 1.8s
+      playerAngle: 0,
+      playerAngleTarget: 0,
+      isGameRunning: false,
+      isVibeModeSafe: true,
+      audioEnabled: true,
+      mouseEnabled: true,
+      keys: { left: false, right: false, a: false, d: false },
+      obstacles: [],
+      starfield: null,
+      contextLost: false,
+      safetyBadgeEl: document.getElementById('safety-badge'),
+    };
+
+    // Safe localStorage high-score fetch
+    try {
+      const savedScore = localStorage.getItem('neon_vibe_high_score');
+      if (savedScore) {
+        STATE.highScore = parseInt(savedScore, 10);
+      }
+    } catch (e) {
+      console.warn("localStorage is disabled or not accessible. High score will reset on page reload.", e);
+    }
+
+    // Canvas sizes
+    const canvas = document.getElementById('game-canvas');
+    let width = window.innerWidth;
+    let height = window.innerHeight;
+
+    // Three.js instances
+    let renderer, scene, camera, clock;
+    let tunnelMesh, tunnelWireframe;
+    let playerGroup, playerCrystal;
+    let pointLight, dirLight, ambientLight;
+
+    // Web Audio Synthesizer variables
+    let audioCtx = null;
+    let mainGainNode = null;
+    let compressorNode = null;
+    let sequencerTimer = null;
+    let synthBPM = 115;
+    let currentBeat = 0;
+    let drumVolume = 0.35;
+    let synthVolume = 0.25;
+
+    // Circular coordinates parameters
+    const TUNNEL_RADIUS = 15;
+    const TUNNEL_LENGTH = 750;
+    const TRACKS_COUNT = 8; // Partition circular space into 8 lanes
+
+    // Initialize Web Audio API safely on user gesture
+    function initAudio() {
+      if (audioCtx) return;
+      
+      const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+      if (!AudioContextClass) {
+        console.warn("Web Audio API is not supported by this browser.");
+        return;
+      }
+
+      audioCtx = new AudioContextClass();
+      
+      // Setup dynamic compressor to prevent clipping
+      compressorNode = audioCtx.createDynamicsCompressor();
+      compressorNode.threshold.setValueAtTime(-12, audioCtx.currentTime);
+      compressorNode.knee.setValueAtTime(30, audioCtx.currentTime);
+      compressorNode.ratio.setValueAtTime(12, audioCtx.currentTime);
+      compressorNode.attack.setValueAtTime(0.003, audioCtx.currentTime);
+      compressorNode.release.setValueAtTime(0.25, audioCtx.currentTime);
+      
+      mainGainNode = audioCtx.createGain();
+      mainGainNode.gain.setValueAtTime(STATE.audioEnabled ? 1.0 : 0.0, audioCtx.currentTime);
+
+      compressorNode.connect(mainGainNode);
+      mainGainNode.connect(audioCtx.destination);
+
+      // Start Synthesizer Sequencer loop
+      startSynthSequencer();
+    }
+
+    function toggleMasterAudio(enable) {
+      STATE.audioEnabled = enable;
+      if (mainGainNode && audioCtx) {
+        mainGainNode.gain.setTargetAtTime(enable ? 1.0 : 0.0, audioCtx.currentTime, 0.1);
+      }
+    }
+
+    // Procedural drum synth kick generator
+    function playProceduralKick(time) {
+      if (!audioCtx || !STATE.audioEnabled) return;
+      
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      
+      osc.connect(gain);
+      gain.connect(compressorNode);
+      
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(150, time);
+      // Pitch sweeps down rapidly for deep kick impact
+      osc.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+      
+      gain.gain.setValueAtTime(drumVolume, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.18);
+      
+      osc.start(time);
+      osc.stop(time + 0.2);
+    }
+
+    // Procedural hi-hat using dynamic noise buffers
+    function playProceduralHiHat(time) {
+      if (!audioCtx || !STATE.audioEnabled) return;
+
+      const bufferSize = audioCtx.sampleRate * 0.05; // Short burst
+      const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+      const data = buffer.getChannelData(0);
+      
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = Math.random() * 2 - 1;
+      }
+      
+      const noise = audioCtx.createBufferSource();
+      noise.buffer = buffer;
+      
+      const filter = audioCtx.createBiquadFilter();
+      filter.type = 'highpass';
+      filter.frequency.value = 7500;
+      
+      const gain = audioCtx.createGain();
+      gain.gain.setValueAtTime(drumVolume * 0.45, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.04);
+      
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(compressorNode);
+      
+      noise.start(time);
+      noise.stop(time + 0.05);
+    }
+
+    // Bass synthesizer with retro square waves
+    function playProceduralBass(time, noteIndex) {
+      if (!audioCtx || !STATE.audioEnabled) return;
+
+      // Key of A minor bassline scale loop: A1, A1, C2, D2, G1, G1, A1, E2
+      const scale = [55.00, 55.00, 65.41, 73.42, 49.00, 49.00, 55.00, 82.41];
+      const freq = scale[noteIndex % scale.length];
+
+      const osc1 = audioCtx.createOscillator();
+      const osc2 = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      const lowpass = audioCtx.createBiquadFilter();
+
+      osc1.type = 'sawtooth';
+      osc2.type = 'square';
+      
+      // Detune oscillator 2 slightly for premium fat stereo chorus feel
+      osc1.frequency.setValueAtTime(freq, time);
+      osc2.frequency.setValueAtTime(freq * 1.006, time);
+
+      lowpass.type = 'lowpass';
+      // Dynamically pulse filter envelope
+      lowpass.frequency.setValueAtTime(250, time);
+      lowpass.frequency.exponentialRampToValueAtTime(1400, time + 0.05);
+      lowpass.frequency.exponentialRampToValueAtTime(300, time + 0.18);
+
+      gain.gain.setValueAtTime(synthVolume * 0.7, time);
+      gain.gain.exponentialRampToValueAtTime(0.001, time + 0.22);
+
+      osc1.connect(lowpass);
+      osc2.connect(lowpass);
+      lowpass.connect(gain);
+      gain.connect(compressorNode);
+
+      osc1.start(time);
+      osc2.start(time);
+      osc1.stop(time + 0.25);
+      osc2.stop(time + 0.25);
+    }
+
+    // Synthesized Sound Effect generators (pooled oscillators to prevent memory leaks)
+    function playSoundFX(type) {
+      if (!audioCtx || !STATE.audioEnabled) return;
+      
+      const now = audioCtx.currentTime;
+      
+      if (type === 'dodge') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(compressorNode);
+        
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(800, now);
+        osc.frequency.exponentialRampToValueAtTime(1800, now + 0.15);
+        
+        gain.gain.setValueAtTime(0.12, now);
+        gain.gain.linearRampToValueAtTime(0.001, now + 0.15);
+        
+        osc.start(now);
+        osc.stop(now + 0.16);
+      } 
+      else if (type === 'nearmiss') {
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(compressorNode);
+        
+        osc.type = 'triangle';
+        osc.frequency.setValueAtTime(1200, now);
+        osc.frequency.setValueAtTime(1600, now + 0.06);
+        osc.frequency.setValueAtTime(2000, now + 0.12);
+        
+        gain.gain.setValueAtTime(0.18, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.24);
+        
+        osc.start(now);
+        osc.stop(now + 0.25);
+      } 
+      else if (type === 'explosion') {
+        const bufferSize = audioCtx.sampleRate * 0.8;
+        const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+        const data = buffer.getChannelData(0);
+        for (let i = 0; i < bufferSize; i++) {
+          data[i] = Math.random() * 2 - 1;
+        }
+        
+        const noise = audioCtx.createBufferSource();
+        noise.buffer = buffer;
+        
+        const filter = audioCtx.createBiquadFilter();
+        filter.type = 'lowpass';
+        filter.frequency.setValueAtTime(800, now);
+        filter.frequency.exponentialRampToValueAtTime(40, now + 0.7);
+        
+        const gain = audioCtx.createGain();
+        gain.gain.setValueAtTime(0.65, now);
+        gain.gain.exponentialRampToValueAtTime(0.001, now + 0.75);
+        
+        noise.connect(filter);
+        filter.connect(gain);
+        gain.connect(compressorNode);
+        
+        noise.start(now);
+        noise.stop(now + 0.8);
+      }
+    }
+
+    // Precise lookahead scheduler loop for procedural loop sequence
+    function startSynthSequencer() {
+      const scheduleAheadTime = 0.1;
+      let nextNoteTime = audioCtx.currentTime;
+
+      function scheduler() {
+        while (nextNoteTime < audioCtx.currentTime + scheduleAheadTime) {
+          scheduleBeat(currentBeat, nextNoteTime);
+          
+          // Step timeline logic (8th notes)
+          const secondsPerBeat = 60.0 / (synthBPM * 2.0); // 8th note speed
+          nextNoteTime += secondsPerBeat;
+          currentBeat++;
+        }
+        sequencerTimer = setTimeout(scheduler, 25);
+      }
+      
+      scheduler();
+    }
+
+    function scheduleBeat(beat, time) {
+      // Bass plays on every eighth note
+      playProceduralBass(time, beat);
+
+      // Kick drum plays on beats 0, 4 (quarter note pulse rhythm)
+      if (beat % 4 === 0) {
+        playProceduralKick(time);
+        
+        // Dynamic visual stroke pulse triggered synchronously to bass loop beats
+        triggerBeatVibePulse();
+      }
+
+      // Procedural hi-hats on off-beats
+      if (beat % 4 === 2) {
+        playProceduralHiHat(time);
+      }
+    }
+
+    function triggerBeatVibePulse() {
+      if (!STATE.isGameRunning) return;
+      
+      // Strobes disabled if Safe Mode active
+      if (STATE.isVibeModeSafe) {
+        // Slow color morph
+        if (ambientLight) {
+          const t = clock.getElapsedTime() * 0.15;
+          ambientLight.color.setHSL(t % 1, 0.6, 0.35);
+        }
+        return;
+      }
+
+      // Strobe Mode visual action! Flashes scene lighting on beat
+      if (pointLight) {
+        pointLight.intensity = 25;
+        // Fast dynamic light interpolator override
+        setTimeout(() => {
+          if (pointLight) pointLight.intensity = 10;
+        }, 80);
+      }
+
+      // Flash background slightly (cyber ambient glow shift)
+      if (scene) {
+        const strobeColors = [0xff007f, 0x00f0ff, 0x9d00ff];
+        const randomColor = strobeColors[Math.floor(Math.random() * strobeColors.length)];
+        
+        if (dirLight) dirLight.color.setHex(randomColor);
+      }
+    }
+
+    // Three.js Graphics Setup
+    function initThree() {
+      clock = new THREE.Clock();
+
+      // Scene
+      scene = new THREE.Scene();
+      scene.fog = new THREE.FogExp2(STATE.isVibeModeSafe ? 0x05031a : 0x0f001e, 0.0035);
+
+      // Camera
+      camera = new THREE.PerspectiveCamera(75, width / height, 0.1, 1000);
+      // Place camera in space inside tunnel
+      camera.position.set(0, 0, 10);
+      camera.lookAt(0, 0, -100);
+
+      // WebGL Renderer with pixel ratio capping to address retina edge case (Edge Case 1)
+      renderer = new THREE.WebGLRenderer({
+        canvas: canvas,
+        antialias: true,
+        powerPreference: "high-performance",
+        alpha: false
+      });
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+      renderer.setSize(width, height);
+      renderer.toneMapping = THREE.ACESFilmicToneMapping;
+
+      // Handle lost graphics context immediately (Edge Case 6)
+      canvas.addEventListener('webglcontextlost', (e) => {
+        e.preventDefault();
+        STATE.contextLost = true;
+        document.getElementById('context-lost-screen').classList.add('active');
+        cancelAnimationFrame(animationFrameId);
+        if (sequencerTimer) clearTimeout(sequencerTimer);
+      }, false);
+
+      canvas.addEventListener('webglcontextrestored', () => {
+        window.location.reload();
+      }, false);
+
+      // Lighting system
+      ambientLight = new THREE.AmbientLight(0xff007f, 0.25);
+      scene.add(ambientLight);
+
+      pointLight = new THREE.PointLight(0x00f0ff, 12, 60);
+      pointLight.position.set(0, 0, 5);
+      scene.add(pointLight);
+
+      dirLight = new THREE.DirectionalLight(0x9d00ff, 1.2);
+      dirLight.position.set(0, 1, -1);
+      scene.add(dirLight);
+
+      // Build the Scrolling Double-Tunnel structure
+      buildTunnel();
+
+      // Build the Infinite Space Starfield (Edge Case 10)
+      buildStarfield();
+
+      // Build the animated futuristic Player vessel
+      buildPlayer();
+
+      // Re-adjust camera and view sizes instantly on resize (Edge Case 3)
+      window.addEventListener('resize', handleWindowResize, false);
+      
+      // Clear keyboard stuck state maps dynamically when window loses focus (Edge Case 11)
+      window.addEventListener('blur', clearInputStates);
+      window.addEventListener('focus', clearInputStates);
+    }
+
+    function buildTunnel() {
+      // Cylinder radius 20, length 800
+      const geom = new THREE.CylinderGeometry(20, 20, TUNNEL_LENGTH, 16, 80, true);
+      // Rotate 90 deg along X to position tunnel pointing forward
+      geom.rotateX(Math.PI / 2);
+
+      // Premium glowing grid material
+      const material = new THREE.MeshBasicMaterial({
+        color: 0x2b0057,
+        wireframe: true,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 0.45
+      });
+
+      tunnelMesh = new THREE.Mesh(geom, material);
+      tunnelMesh.position.set(0, 0, -TUNNEL_LENGTH / 2 + 10);
+      scene.add(tunnelMesh);
+
+      // Secondary layered glowing wireframe for stunning parallaxes
+      const wireframeGeom = new THREE.CylinderGeometry(20.3, 20.3, TUNNEL_LENGTH, 8, 40, true);
+      wireframeGeom.rotateX(Math.PI / 2);
+      
+      const wireframeMat = new THREE.MeshBasicMaterial({
+        color: 0xff007f,
+        wireframe: true,
+        side: THREE.BackSide,
+        transparent: true,
+        opacity: 0.15
+      });
+
+      tunnelWireframe = new THREE.Mesh(wireframeGeom, wireframeMat);
+      tunnelWireframe.position.copy(tunnelMesh.position);
+      scene.add(tunnelWireframe);
+    }
+
+    function buildStarfield() {
+      const starCount = 650;
+      const geom = new THREE.BufferGeometry();
+      const positions = new Float32Array(starCount * 3);
+      const colors = new Float32Array(starCount * 3);
+
+      for (let i = 0; i < starCount; i++) {
+        // Position stars inside the cylindrical space
+        const angle = Math.random() * Math.PI * 2;
+        const radius = Math.random() * 18 + 1; // Fit stars in tunnel
+        
+        positions[i * 3] = radius * Math.cos(angle);
+        positions[i * 3 + 1] = radius * Math.sin(angle);
+        positions[i * 3 + 2] = -Math.random() * TUNNEL_LENGTH; // depth scatter
+
+        // Synthwave colors for stars: cyan and magenta mixtures
+        const isMagenta = Math.random() > 0.5;
+        colors[i * 3] = isMagenta ? 1.0 : 0.0;
+        colors[i * 3 + 1] = isMagenta ? 0.0 : 0.94;
+        colors[i * 3 + 2] = 1.0;
+      }
+
+      geom.setAttribute('position', new THREE.BufferAttribute(positions, 3));
+      geom.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+
+      // Square glowing sprites
+      const starMaterial = new THREE.PointsMaterial({
+        size: 0.8,
+        vertexColors: true,
+        transparent: true,
+        opacity: 0.8,
+        fog: true
+      });
+
+      STATE.starfield = new THREE.Points(geom, starMaterial);
+      scene.add(STATE.starfield);
+    }
+
+    function buildPlayer() {
+      // Build a premium floating crystal diamond structure
+      playerGroup = new THREE.Group();
+      playerGroup.position.set(0, -TUNNEL_RADIUS, 0); // Position bottom of tunnel radial circle
+      scene.add(playerGroup);
+
+      // Core diamond geometric crystal
+      const geom = new THREE.OctahedronGeometry(1.2, 0);
+      const mat = new THREE.MeshStandardMaterial({
+        color: 0x00f0ff,
+        emissive: 0x00a0cf,
+        roughness: 0.1,
+        metalness: 0.9,
+        flatShading: true
+      });
+
+      playerCrystal = new THREE.Mesh(geom, mat);
+      playerGroup.add(playerCrystal);
+
+      // Outer delicate neon lines wrapping the player crystal
+      const outerGeom = new THREE.OctahedronGeometry(1.6, 1);
+      const outerMat = new THREE.MeshBasicMaterial({
+        color: 0xff007f,
+        wireframe: true,
+        transparent: true,
+        opacity: 0.7
+      });
+      const outerShell = new THREE.Mesh(outerGeom, outerMat);
+      playerGroup.add(outerShell);
+    }
+
+    function handleWindowResize() {
+      width = window.innerWidth;
+      height = window.innerHeight;
+      
+      if (camera && renderer) {
+        camera.aspect = width / height;
+        camera.updateProjectionMatrix();
+        renderer.setSize(width, height);
+      }
+    }
+
+    // Input handlers
+    const keyMap = STATE.keys;
+    window.addEventListener('keydown', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'a' || key === 'arrowleft') keyMap.left = true;
+      if (key === 'd' || key === 'arrowright') keyMap.right = true;
+    });
+
+    window.addEventListener('keyup', (e) => {
+      const key = e.key.toLowerCase();
+      if (key === 'a' || key === 'arrowleft') keyMap.left = false;
+      if (key === 'd' || key === 'arrowright') keyMap.right = false;
+    });
+
+    // Touch and mouse inputs (Edge Case 12)
+    window.addEventListener('mousemove', (e) => {
+      if (!STATE.isGameRunning || !STATE.mouseEnabled) return;
+      // Map mouse horizontally across screen width to radial coordinates in radians
+      const normX = e.clientX / window.innerWidth; // 0 to 1
+      STATE.playerAngleTarget = (normX * Math.PI * 2.2) - Math.PI * 1.1;
+    });
+
+    window.addEventListener('touchmove', (e) => {
+      if (!STATE.isGameRunning || e.touches.length === 0) return;
+      // Drag mechanics on mobile touch
+      const touch = e.touches[0];
+      const normX = touch.clientX / window.innerWidth;
+      STATE.playerAngleTarget = (normX * Math.PI * 2.2) - Math.PI * 1.1;
+    }, { passive: false });
+
+    function clearInputStates() {
+      keyMap.left = false;
+      keyMap.right = false;
+      keyMap.a = false;
+      keyMap.d = false;
+    }
+
+    // Spawning coordinates logic mapping obstacles in 8 lanes
+    function spawnObstacle() {
+      if (!STATE.isGameRunning) return;
+
+      const shapes = ['prism', 'box', 'torus'];
+      const chosenShape = shapes[Math.floor(Math.random() * shapes.length)];
+      
+      // Determine track lanes to spawn. Spawn between 1 and 3 obstacles in a wave
+      // Guaranteeing safe-path logic by keeping at least two adjacent lanes open (Edge Case 9)
+      const obstacleLanes = [];
+      const density = Math.min(3, Math.floor(Math.random() * 2) + 1 + Math.floor(STATE.score / 15000));
+      
+      // Simple slot shuffle ensuring lanes have clear gaps
+      const activeSlots = [0, 1, 2, 3, 4, 5, 6, 7];
+      // Shuffle active slots
+      for (let i = activeSlots.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [activeSlots[i], activeSlots[j]] = [activeSlots[j], activeSlots[i]];
+      }
+
+      // Pick selected slots, but restrict to ensure at least a 2-slot consecutive gap
+      const selectedTracks = [];
+      for (let i = 0; i < density; i++) {
+        selectedTracks.push(activeSlots[i]);
+      }
+
+      selectedTracks.forEach(lane => {
+        const angle = (lane / TRACKS_COUNT) * Math.PI * 2;
+        
+        let geom;
+        if (chosenShape === 'box') {
+          geom = new THREE.BoxGeometry(2.5, 2.5, 2.5);
+        } else if (chosenShape === 'torus') {
+          geom = new THREE.TorusGeometry(1.6, 0.4, 6, 12);
+        } else {
+          geom = new THREE.ConeGeometry(1.8, 3.2, 5);
+          geom.rotateX(Math.PI / 2); // Make prism lay aligned in tunnel
+        }
+
+        const isCyan = Math.random() > 0.5;
+        const color = isCyan ? 0x00f0ff : 0xff007f;
+
+        const material = new THREE.MeshBasicMaterial({
+          color: color,
+          wireframe: true,
+        });
+
+        const mesh = new THREE.Mesh(geom, material);
+        mesh.position.set(
+          TUNNEL_RADIUS * Math.cos(angle),
+          TUNNEL_RADIUS * Math.sin(angle),
+          -TUNNEL_LENGTH + 20 // Spawn far deep inside tunnel (Edge Case 10)
+        );
+
+        scene.add(mesh);
+
+        // Store custom state
+        STATE.obstacles.push({
+          mesh: mesh,
+          angle: angle,
+          lane: lane,
+          passed: false,
+          nearMissTriggered: false,
+          spinSpeedX: Math.random() * 2 + 1,
+          spinSpeedY: Math.random() * 2 + 1
+        });
+      });
+    }
+
+    // Visibility handlers to prevent minification jumps and warping (Edge Case 5)
+    document.addEventListener('visibilitychange', () => {
+      if (document.hidden) {
+        if (STATE.isGameRunning) {
+          pauseGame();
+        }
+      }
+    });
+
+    function pauseGame() {
+      // Standard dynamic context suspension
+      if (audioCtx && audioCtx.state === 'running') {
+        audioCtx.suspend();
+      }
+    }
+
+    function resumeGame() {
+      if (audioCtx && audioCtx.state === 'suspended') {
+        audioCtx.resume();
+      }
+    }
+
+    // Main animation run frame loop
+    let animationFrameId;
+    
+    function animate() {
+      animationFrameId = requestAnimationFrame(animate);
+
+      // Handle graphics lost context instantly
+      if (STATE.contextLost) return;
+
+      const delta = clock.getDelta();
+      
+      // Frame rate independence implementation (Edge Case 4)
+      const currentSpeed = STATE.obstacleSpeed * STATE.speedLevel * delta;
+
+      if (STATE.isGameRunning) {
+        // Incremental score
+        STATE.score += Math.floor(180 * delta);
+        document.getElementById('score-value').innerText = String(STATE.score).padStart(5, '0');
+
+        // Linear speed progression loop
+        STATE.speedLevel = 1.0 + (STATE.score / 22000);
+        synthBPM = 115 + Math.min(45, (STATE.score / 1800)); // Dynamic BPM acceleration
+        document.getElementById('speed-level').innerText = STATE.speedLevel.toFixed(1) + 'x';
+        document.getElementById('multiplier-badge').innerText = 'x' + Math.floor(STATE.speedLevel);
+
+        // Player movement handling (Keyboard)
+        if (!STATE.mouseEnabled) {
+          const rotationSpeed = 2.8 * delta;
+          if (keyMap.left) STATE.playerAngleTarget += rotationSpeed;
+          if (keyMap.right) STATE.playerAngleTarget -= rotationSpeed;
+        }
+
+        // Smooth radial landing interpolation
+        STATE.playerAngle = THREE.MathUtils.lerp(STATE.playerAngle, STATE.playerAngleTarget, 0.15);
+
+        // Update player physical coordinates
+        const playerX = (TUNNEL_RADIUS - 0.5) * Math.cos(STATE.playerAngle);
+        const playerY = (TUNNEL_RADIUS - 0.5) * Math.sin(STATE.playerAngle);
+        playerGroup.position.set(playerX, playerY, -10);
+
+        // Responsive banking and flight tilt animations
+        const bankingAngle = (STATE.playerAngleTarget - STATE.playerAngle) * 0.85;
+        playerGroup.rotation.z = STATE.playerAngle + Math.PI / 2 + bankingAngle;
+        playerCrystal.rotation.y += 1.8 * delta;
+
+        // Animate scrolling double-tunnels
+        tunnelMesh.rotation.z += 0.05 * STATE.speedLevel * delta;
+        tunnelWireframe.rotation.z -= 0.08 * STATE.speedLevel * delta;
+
+        // Animate deep spaces stars
+        animateStarfield(currentSpeed, delta);
+
+        // Update, animate, and check collision on all active obstacles
+        updateObstacles(currentSpeed, delta);
+
+        // Wave spawner loop coordinator
+        STATE.spawnTimer += delta;
+        if (STATE.spawnTimer >= STATE.spawnInterval / STATE.speedLevel) {
+          spawnObstacle();
+          STATE.spawnTimer = 0;
+        }
+      }
+
+      renderer.render(scene, camera);
+    }
+
+    function animateStarfield(speed, delta) {
+      if (!STATE.starfield) return;
+
+      const positions = STATE.starfield.geometry.attributes.position.array;
+      const count = positions.length / 3;
+
+      for (let i = 0; i < count; i++) {
+        // Move stars forward toward the camera
+        positions[i * 3 + 2] += speed * 0.95;
+
+        // Reset stars passing camera back to far end of the tunnel (Edge Case 10)
+        if (positions[i * 3 + 2] > 15) {
+          positions[i * 3 + 2] = -TUNNEL_LENGTH;
+        }
+      }
+
+      STATE.starfield.geometry.attributes.position.needsUpdate = true;
+    }
+
+    function updateObstacles(speed, delta) {
+      const collisionThreshold = 2.4; // Radial angle width mapping bounds
+      const nearMissThreshold = 4.2;
+
+      for (let i = STATE.obstacles.length - 1; i >= 0; i--) {
+        const obs = STATE.obstacles[i];
+        
+        // Move obstacle toward the player
+        obs.mesh.position.z += speed;
+        
+        // Dynamic obstacle wireframe rotation spin
+        obs.mesh.rotation.x += obs.spinSpeedX * delta;
+        obs.mesh.rotation.y += obs.spinSpeedY * delta;
+
+        const distanceZ = obs.mesh.position.z - (-10); // Player is located at Z = -10
+
+        // 1. Double Collision testing logic mapping cylindrical coordinates (Edge Case 8)
+        if (Math.abs(distanceZ) < 1.5) {
+          // Check radial angle distances
+          let diffAngle = Math.abs(obs.angle - STATE.playerAngle);
+          // Normalize angular differences around 2-PI loop wrap
+          diffAngle = Math.min(diffAngle, Math.PI * 2 - diffAngle);
+
+          if (diffAngle < 0.28) { // Collision bounds mapped
+            triggerGameOver();
+            return;
+          }
+
+          // 2. Near Miss check threshold mapping (Edge Case 8)
+          if (!obs.nearMissTriggered && diffAngle < 0.7) {
+            obs.nearMissTriggered = true;
+            triggerNearMiss();
+          }
+        }
+
+        // Clean up passed obstacles (Edge Case 10)
+        if (obs.mesh.position.z > 20) {
+          scene.remove(obs.mesh);
+          obs.mesh.geometry.dispose();
+          obs.mesh.material.dispose();
+          STATE.obstacles.splice(i, 1);
+          
+          if (STATE.isGameRunning) {
+            STATE.obstaclesPassedCount++;
+            // Reward player for successful dodging
+            STATE.score += 150;
+            playSoundFX('dodge');
+          }
+        }
+      }
+    }
+
+    function triggerNearMiss() {
+      // Award extra scores
+      STATE.score += 250;
+      playSoundFX('nearmiss');
+      
+      const indicator = document.getElementById('near-miss-indicator');
+      indicator.classList.remove('near-miss-animate');
+      // Force repaint to restart animation
+      void indicator.offsetWidth;
+      indicator.classList.add('near-miss-animate');
+    }
+
+    function triggerGameOver() {
+      STATE.isGameRunning = false;
+      playSoundFX('explosion');
+
+      // Strobe warning flashing visual shockwave on impact (Epilepsy control checks)
+      if (!STATE.isVibeModeSafe) {
+        document.body.style.backgroundColor = '#ff007f';
+        setTimeout(() => {
+          document.body.style.backgroundColor = '#03001e';
+        }, 150);
+      }
+
+      // Stop sequencer
+      if (sequencerTimer) clearTimeout(sequencerTimer);
+
+      // Safe update high score and store securely (Edge Case 13)
+      if (STATE.score > STATE.highScore) {
+        STATE.highScore = STATE.score;
+        try {
+          localStorage.setItem('neon_vibe_high_score', STATE.highScore);
+        } catch (e) {
+          console.warn("Could not save high score to localStorage.", e);
+        }
+      }
+
+      // Show screens
+      document.getElementById('final-score').innerText = STATE.score;
+      document.getElementById('high-score').innerText = STATE.highScore;
+      
+      document.getElementById('hud').classList.add('hidden');
+      document.getElementById('controls-tip').classList.add('hidden');
+      document.getElementById('game-over-screen').classList.remove('hidden');
+    }
+
+    function resetGameState() {
+      // Clear obstacles
+      STATE.obstacles.forEach(obs => {
+        scene.remove(obs.mesh);
+        obs.mesh.geometry.dispose();
+        obs.mesh.material.dispose();
+      });
+      STATE.obstacles = [];
+
+      // Reset values
+      STATE.score = 0;
+      STATE.speedLevel = 1.0;
+      STATE.obstaclesPassedCount = 0;
+      STATE.playerAngle = 0;
+      STATE.playerAngleTarget = 0;
+      STATE.spawnTimer = 0;
+      currentBeat = 0;
+
+      // Reset lights and colors
+      if (ambientLight) ambientLight.color.setHex(0xff007f);
+      if (pointLight) pointLight.intensity = 12;
+
+      // Start gameplay loop
+      clock.getDelta(); // Clear delta timers
+      STATE.isGameRunning = true;
+
+      document.getElementById('score-value').innerText = '00000';
+      document.getElementById('speed-level').innerText = '1.0x';
+      
+      document.getElementById('game-over-screen').classList.add('hidden');
+      document.getElementById('hud').classList.remove('hidden');
+      if (!STATE.mouseEnabled) {
+        document.getElementById('controls-tip').classList.remove('hidden');
+      }
+
+      // Start audio again
+      initAudio();
+      resumeGame();
+    }
+
+    // Bind start overlays click interfaces
+    document.getElementById('btn-start').addEventListener('click', () => {
+      // Apply UI selection states
+      STATE.isVibeModeSafe = !document.getElementById('toggle-safety').checked;
+      STATE.mouseEnabled = document.getElementById('toggle-mouse').checked;
+      
+      // Update safe state visuals
+      if (STATE.isVibeModeSafe) {
+        STATE.safetyBadgeEl.style.display = 'block';
+        if (scene) scene.fog.color.setHex(0x05031a);
+      } else {
+        STATE.safetyBadgeEl.style.display = 'none';
+        if (scene) scene.fog.color.setHex(0x0f001e);
+      }
+
+      toggleMasterAudio(document.getElementById('toggle-audio').checked);
+
+      document.getElementById('start-screen').classList.add('hidden');
+      document.getElementById('hud').classList.remove('hidden');
+      if (!STATE.mouseEnabled) {
+        document.getElementById('controls-tip').classList.remove('hidden');
+      }
+
+      // Initialize sound first on gesture
+      initAudio();
+
+      STATE.isGameRunning = true;
+      clock.getDelta(); // Clear delta timers
+    });
+
+    document.getElementById('btn-restart').addEventListener('click', () => {
+      resetGameState();
+    });
+
+    document.getElementById('btn-reload').addEventListener('click', () => {
+      window.location.reload();
+    });
+
+    // Initialize Graphic System
+    initThree();
+    
+    // Start running frame loop animations
+    animate();
+
+  </script>
+</body>
+</html>
