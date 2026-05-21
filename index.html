@@ -99,6 +99,20 @@
                   inset 0 0 15px rgba(0, 240, 255, 0.1);
       transform: translateY(0);
       animation: float-in 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+
+    /* Glass card custom scrollbars */
+    .glass-card::-webkit-scrollbar {
+      width: 6px;
+    }
+    .glass-card::-webkit-scrollbar-track {
+      background: rgba(0,0,0,0.2);
+    }
+    .glass-card::-webkit-scrollbar-thumb {
+      background: var(--cyan);
+      border-radius: 3px;
     }
 
     @keyframes float-in {
@@ -249,6 +263,22 @@
     .btn-cyber:active {
       transform: scale(0.98);
     }
+
+    /* Keyboard focus glow outlines */
+    .keyboard-focused, :focus-visible {
+      outline: 3px solid var(--green) !important;
+      box-shadow: 0 0 35px var(--green) !important;
+      transform: scale(1.04) !important;
+    }
+
+    .switch:has(input.keyboard-focused), .switch:has(input:focus-visible) {
+      outline: 3px solid var(--green) !important;
+      box-shadow: 0 0 35px var(--green) !important;
+      border-radius: 20px;
+    }
+
+
+
 
     /* HUD Styling */
     #hud {
@@ -456,6 +486,19 @@
       box-shadow: inset 0 0 80px rgba(255, 0, 0, 0.4);
     }
 
+    /* Full-Screen Translucent Flash Overlay */
+    #flash-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 7;
+      opacity: 0;
+      transition: opacity 0.03s ease;
+    }
+
     .glitching {
       animation: screenNoise 0.15s infinite;
     }
@@ -613,9 +656,12 @@
   </style>
 </head>
 <body>
+  <!-- Classic Warez Chiptune Music Stream -->
+  <audio id="chiptune-music" loop crossorigin="anonymous" src="https://archive.org/download/essential-keygen-music/01%20-%20rez%2Bkenet%20-%20unreeeal%20superhero%203.mp3"></audio>
 
   <canvas id="game-canvas"></canvas>
   <div id="crt-glitch"></div>
+  <div id="flash-overlay"></div>
 
   <!-- Start Overlay Screen -->
   <div id="start-screen" class="screen-overlay">
@@ -647,6 +693,9 @@
       </div>
       
       <button id="btn-start" class="btn-cyber">Start Engine</button>
+      <div style="font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 18px; font-family: 'Share Tech Mono', monospace; text-shadow: 0 0 5px rgba(255,255,255,0.1); text-align: center;">
+        Music: "Unreeeal Superhero 3" by Kenët & Rez (CC-BY)
+      </div>
     </div>
   </div>
 
@@ -693,6 +742,9 @@
       </div>
 
       <button id="btn-next-level" class="btn-cyber" style="background: linear-gradient(135deg, var(--green) 0%, var(--cyan) 100%); box-shadow: 0 0 25px rgba(57, 255, 20, 0.4);">Engage Hyperdrive</button>
+      <div style="font-size: 0.8rem; color: rgba(255,255,255,0.45); margin-top: 18px; font-family: 'Share Tech Mono', monospace; text-shadow: 0 0 5px rgba(255,255,255,0.1); text-align: center;">
+        Music: "Unreeeal Superhero 3" by Kenët & Rez (CC-BY)
+      </div>
     </div>
   </div>
 
@@ -723,6 +775,15 @@
       <h1 class="game-title">Graphics Reset</h1>
       <p class="tagline">Your WebGL graphics context was lost due to GPU resource limits.</p>
       <button id="btn-reload" class="btn-cyber">Reinitialize</button>
+    </div>
+  </div>
+
+  <!-- Game Pause Screen -->
+  <div id="pause-screen" class="screen-overlay hidden">
+    <div class="glass-card" style="border-color: var(--cyan);">
+      <h1 class="game-title" style="background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%); -webkit-background-clip: text;">SYSTEM PAUSED</h1>
+      <p class="tagline">Cyber flight vector held in stasis.</p>
+      <button id="btn-resume" class="btn-cyber" style="background: linear-gradient(135deg, var(--cyan) 0%, var(--magenta) 100%); box-shadow: 0 0 20px rgba(0, 240, 255, 0.4);">RESUME FLIGHT</button>
     </div>
   </div>
 
@@ -845,7 +906,7 @@
       powerups: [],
       
       spawnTimer: 0,
-      spawnInterval: 45, // frames between spawn checks
+      spawnInterval: 38, // frames between spawn checks
       
       // Active Powerup Buff States
       isInvincible: false,
@@ -858,13 +919,20 @@
       scoreSurgeTime: 0,
       isControlsInverted: false,
       controlsInvertedTime: 0,
+      isWeaponsCharged: false,
+      weaponsChargedTime: 0,
+      isVortexActive: false,
+      vortexTime: 0,
+      vortexTargetAngle: 0,
+      cameraShake: 0,
       
       // Gun cooldown
       lastShotTime: 0,
-      shotCooldown: 300, // milliseconds
+      shotCooldown: 220, // trimmed down from 300
       
       obstaclesPassedCount: 0
     };
+    window.STATE = STATE; // Expose for automated validation
 
     // Keyboard Maps
     const keyMap = {
@@ -902,6 +970,14 @@
         STATE.isPointerLocked = true;
       } else {
         STATE.isPointerLocked = false;
+        // Auto-pause if mouse is steering and game is running and pointer lock is lost!
+        if (STATE.isGameRunning && STATE.mouseEnabled) {
+          setTimeout(() => {
+            if (STATE.isGameRunning) {
+              togglePause();
+            }
+          }, 50);
+        }
       }
     });
 
@@ -1103,31 +1179,60 @@
         // Dynamic speed beats acceleration matching score multipliers
         const speedFactor = 1.0 + (STATE.speedLevel - 1.0) * 0.25;
         const actualInterval = eighthNoteTime / speedFactor;
+
+        // Dynamic scrolling structural ribs color & scale pulsing on every beats (eighth notes)
+        if (STATE.ribs && STATE.ribs.length > 0) {
+          const hue = (beat * 22.5) % 360;
+          const colorHex = new THREE.Color(`hsl(${hue}, 100%, 50%)`).getHex();
+          STATE.ribs.forEach((rib, idx) => {
+            const ribPhase = (beat + idx) % 8;
+            if (ribPhase === 0) {
+              rib.material.color.setHex(colorHex);
+              rib.material.opacity = 0.95;
+              rib.scale.set(1.18, 1.18, 1);
+            }
+          });
+        }
         
         // 1. Kick Drum Synthesizer (Standard beats)
         if (beat % 2 === 0) {
-          const kickOsc = audioCtx.createOscillator();
-          const kickGain = audioCtx.createGain();
-          
-          kickOsc.type = 'sine';
-          kickOsc.frequency.setValueAtTime(150, time);
-          kickOsc.frequency.exponentialRampToValueAtTime(45, time + 0.12);
-          
-          kickGain.gain.setValueAtTime(0.35, time);
-          kickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
-          
-          kickOsc.connect(kickGain);
-          kickGain.connect(STATE.masterGainNode);
-          
-          kickOsc.start(time);
-          kickOsc.stop(time + 0.16);
+          if (!isBgmPlaying) {
+            const kickOsc = audioCtx.createOscillator();
+            const kickGain = audioCtx.createGain();
+            
+            kickOsc.type = 'sine';
+            kickOsc.frequency.setValueAtTime(150, time);
+            kickOsc.frequency.exponentialRampToValueAtTime(45, time + 0.12);
+            
+            kickGain.gain.setValueAtTime(0.35, time);
+            kickGain.gain.exponentialRampToValueAtTime(0.001, time + 0.15);
+            
+            kickOsc.connect(kickGain);
+            kickGain.connect(STATE.masterGainNode);
+            
+            kickOsc.start(time);
+            kickOsc.stop(time + 0.16);
+          }
 
           // Audio reactive vector pulsing logic synced to the kick drum
           if (ambientLight) {
             ambientLight.color.setHex(beat % 4 === 0 ? 0xff007f : 0x00f0ff);
           }
           if (pointLight) {
-            pointLight.intensity = 18.0;
+            pointLight.intensity = 24.0;
+          }
+          
+          // Strobe inner/outer cylinder colors on kick beat
+          const cycleColors = [0xff007f, 0x00f0ff, 0x9d00ff, 0xff0055, 0xff00ab, 0x39ff14];
+          const nextColor = cycleColors[Math.floor(Math.random() * cycleColors.length)];
+          if (STATE.innerMesh) {
+            STATE.innerMesh.material.color.setHex(nextColor);
+            STATE.innerMesh.material.opacity = 0.22;
+          }
+          if (STATE.outerMesh) {
+            const oppColor = cycleColors[(cycleColors.indexOf(nextColor) + 3) % cycleColors.length];
+            STATE.outerMesh.material.color.setHex(oppColor);
+            STATE.outerMesh.material.opacity = 0.18;
           }
         }
 
@@ -1136,39 +1241,41 @@
         const midiNote = notes[beat % notes.length];
         const freq = Math.pow(2, (midiNote - 69) / 12) * 440;
 
-        const bassOsc = audioCtx.createOscillator();
-        const bassOsc2 = audioCtx.createOscillator();
-        const bassFilter = audioCtx.createBiquadFilter();
-        const bassGain = audioCtx.createGain();
+        if (!isBgmPlaying) {
+          const bassOsc = audioCtx.createOscillator();
+          const bassOsc2 = audioCtx.createOscillator();
+          const bassFilter = audioCtx.createBiquadFilter();
+          const bassGain = audioCtx.createGain();
 
-        bassOsc.type = 'sawtooth';
-        bassOsc.frequency.setValueAtTime(freq, time);
-        
-        bassOsc2.type = 'sawtooth';
-        bassOsc2.frequency.setValueAtTime(freq * 1.015, time); // detune
-        
-        bassFilter.type = 'lowpass';
-        bassFilter.Q.setValueAtTime(6, time);
-        bassFilter.frequency.setValueAtTime(180, time);
-        bassFilter.frequency.exponentialRampToValueAtTime(680, time + actualInterval * 0.7);
+          bassOsc.type = 'sawtooth';
+          bassOsc.frequency.setValueAtTime(freq, time);
+          
+          bassOsc2.type = 'sawtooth';
+          bassOsc2.frequency.setValueAtTime(freq * 1.015, time); // detune
+          
+          bassFilter.type = 'lowpass';
+          bassFilter.Q.setValueAtTime(6, time);
+          bassFilter.frequency.setValueAtTime(180, time);
+          bassFilter.frequency.exponentialRampToValueAtTime(680, time + actualInterval * 0.7);
 
-        bassGain.gain.setValueAtTime(0.12, time);
-        bassGain.gain.exponentialRampToValueAtTime(0.001, time + actualInterval * 0.95);
+          bassGain.gain.setValueAtTime(0.12, time);
+          bassGain.gain.exponentialRampToValueAtTime(0.001, time + actualInterval * 0.95);
 
-        bassOsc.connect(bassFilter);
-        bassOsc2.connect(bassFilter);
-        bassFilter.connect(bassGain);
-        bassGain.connect(STATE.masterGainNode);
+          bassOsc.connect(bassFilter);
+          bassOsc2.connect(bassFilter);
+          bassFilter.connect(bassGain);
+          bassGain.connect(STATE.masterGainNode);
 
-        bassOsc.start(time);
-        bassOsc2.start(time);
-        bassOsc.stop(time + actualInterval);
-        bassOsc2.stop(time + actualInterval);
+          bassOsc.start(time);
+          bassOsc2.start(time);
+          bassOsc.stop(time + actualInterval);
+          bassOsc2.stop(time + actualInterval);
 
-        // Keep tracks of active oscillators to disconnect them gracefully on backgrounding (Edge Case 14)
-        synthNodes.push(bassOsc, bassOsc2);
-        if (synthNodes.length > 30) {
-          synthNodes.splice(0, 10);
+          // Keep tracks of active oscillators to disconnect them gracefully on backgrounding (Edge Case 14)
+          synthNodes.push(bassOsc, bassOsc2);
+          if (synthNodes.length > 30) {
+            synthNodes.splice(0, 10);
+          }
         }
 
         // Schedule next eighth note in loop arpeggiation
@@ -1192,6 +1299,43 @@
     function resumeGame() {
       if (audioCtx) {
         audioCtx.resume();
+      }
+    }
+
+    function togglePause() {
+      // Don't toggle pause if start screen, game over screen, or upgrade screen are visible
+      if (!document.getElementById('start-screen').classList.contains('hidden') ||
+          !document.getElementById('game-over-screen').classList.contains('hidden') ||
+          !document.getElementById('upgrade-screen').classList.contains('hidden') ||
+          !document.getElementById('context-lost-screen').classList.contains('hidden')) {
+        return;
+      }
+
+      const pauseScreen = document.getElementById('pause-screen');
+      if (STATE.isGameRunning) {
+        // Pause Game
+        STATE.isGameRunning = false;
+        if (animationFrameId) cancelAnimationFrame(animationFrameId);
+        if (sequencerTimer) clearTimeout(sequencerTimer);
+        pauseGame();
+        pauseBGM();
+        pauseScreen.classList.remove('hidden');
+        resetMenuFocus();
+        if (document.pointerLockElement === canvas) {
+          document.exitPointerLock();
+        }
+      } else {
+        // Resume Game
+        pauseScreen.classList.add('hidden');
+        if (STATE.mouseEnabled) {
+          canvas.requestPointerLock();
+        }
+        resumeGame();
+        playBGM();
+        clock.getDelta(); // Clear delta accumulator
+        STATE.isGameRunning = true;
+        animate();
+        startSynthSequencer();
       }
     }
 
@@ -1382,21 +1526,25 @@
       playerGroup = new THREE.Group();
       scene.add(playerGroup);
 
-      // Diamond core mesh
+      // Diamond core mesh (Premium solid flat-shaded Phong material)
       const coreGeom = new THREE.OctahedronGeometry(1.2, 0);
-      const coreMat = new THREE.MeshBasicMaterial({
+      const coreMat = new THREE.MeshPhongMaterial({
         color: 0x00f0ff,
-        wireframe: true
+        emissive: 0x00557f,
+        emissiveIntensity: 0.85,
+        flatShading: true,
+        shininess: 100,
+        transparent: false
       });
       const coreMesh = new THREE.Mesh(coreGeom, coreMat);
       playerGroup.add(coreMesh);
 
-      // Outer bounding glowing structural lines
+      // Outer bounding glowing structural lines (Enhanced opacity glow border)
       const outlineGeom = new THREE.OctahedronGeometry(1.4, 0);
       const outlineMat = new THREE.MeshBasicMaterial({
         color: 0xff007f,
         transparent: true,
-        opacity: 0.4,
+        opacity: 0.6,
         blending: THREE.AdditiveBlending
       });
       const outlineMesh = new THREE.Mesh(outlineGeom, outlineMat);
@@ -1452,6 +1600,11 @@
       const h = window.innerHeight;
       camera.aspect = w / h;
       camera.updateProjectionMatrix();
+      
+      // Re-evaluate devicePixelRatio on zoom/resize to maintain high-DPI crispness
+      const pixelRatio = Math.min(window.devicePixelRatio, 2.0);
+      renderer.setPixelRatio(pixelRatio);
+      
       renderer.setSize(w, h);
       composer.setSize(w, h);
     }
@@ -1501,11 +1654,14 @@
         const colors = [0xff007f, 0x00f0ff, 0x9d00ff, 0xff0055];
         const color = colors[lane % colors.length];
 
-        const mat = new THREE.MeshBasicMaterial({
+        // Solid high-legibility flat-shaded Phong material with self-illumination
+        const mat = new THREE.MeshPhongMaterial({
           color: color,
-          wireframe: true,
-          transparent: true,
-          opacity: 0.8
+          emissive: color,
+          emissiveIntensity: 0.55,
+          flatShading: true,
+          shininess: 40,
+          transparent: false
         });
 
         // Group together structural outline
@@ -1515,8 +1671,8 @@
         const angle = lane * LANE_ANGLE_STEP;
         const radius = TUNNEL_RADIUS - 1.2;
         mesh.position.set(
-          Math.cos(angle) * radius,
           Math.sin(angle) * radius,
+          -Math.cos(angle) * radius,
           -TUNNEL_LENGTH
         );
 
@@ -1546,12 +1702,13 @@
       const angle = lane * LANE_ANGLE_STEP;
       const radius = TUNNEL_RADIUS - 1.2;
 
-      // Pick random collectable or hazard (15 dynamic options)
+      // Pick random collectable or hazard (18 dynamic options)
       const types = [
         'shard', 'shard', 'shard', 'shard', // high probability
         'shield', 'boost_battery', 'blaster_ammo',
         'invincibility', 'magnet', 'time_warp', 'emp', 'surge',
-        'hazard_glitch', 'hazard_invert', 'hazard_drain'
+        'hazard_glitch', 'hazard_invert', 'hazard_drain',
+        'weapons_charger', 'hazard_vortex', 'hazard_double_spawn'
       ];
       const type = types[Math.floor(Math.random() * types.length)];
 
@@ -1584,23 +1741,35 @@
       } else if (type === 'surge') {
         geom = new THREE.ConeGeometry(0.7, 1.5, 4);
         color = 0xff00ab; // hot pink
+      } else if (type === 'weapons_charger') {
+        geom = new THREE.TorusGeometry(0.7, 0.15, 8, 12);
+        color = 0x39ff14; // green double torus
+      } else if (type === 'hazard_vortex') {
+        geom = new THREE.TorusGeometry(0.8, 0.2, 4, 16);
+        color = 0xffa500; // orange ring
+      } else if (type === 'hazard_double_spawn') {
+        geom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
+        color = 0xff0055; // crimson red box
       } else {
         // Hazards
         geom = new THREE.BoxGeometry(1.2, 1.2, 1.2);
         color = 0xff3131; // bright hazard red
       }
 
-      mat = new THREE.MeshBasicMaterial({
+      // Solid high-legibility flat-shaded Phong material with glossy highlights
+      mat = new THREE.MeshPhongMaterial({
         color: color,
-        wireframe: true,
-        transparent: true,
-        opacity: 0.95
+        emissive: color,
+        emissiveIntensity: 0.65,
+        flatShading: true,
+        shininess: 80,
+        transparent: false
       });
 
       const mesh = new THREE.Mesh(geom, mat);
       mesh.position.set(
-        Math.cos(angle) * radius,
         Math.sin(angle) * radius,
+        -Math.cos(angle) * radius,
         -TUNNEL_LENGTH
       );
       mesh.rotation.set(Math.random(), Math.random(), Math.random());
@@ -1616,14 +1785,17 @@
 
     // Fire laser blaster projectile down the lane
     function fireBlaster() {
-      if (!STATE.isGameRunning || STATE.laserAmmo <= 0) return;
+      if (!STATE.isGameRunning) return;
+      if (STATE.laserAmmo <= 0 && !STATE.isWeaponsCharged) return;
 
       const now = Date.now();
       const actualCooldown = STATE.shotCooldown * (1.0 - STATE.blasterUpgradeTier * 0.175);
       if (now - STATE.lastShotTime < actualCooldown) return; // rate limit
 
       STATE.lastShotTime = now;
-      STATE.laserAmmo--;
+      if (!STATE.isWeaponsCharged) {
+        STATE.laserAmmo--;
+      }
       document.getElementById('ammo-value').innerText = String(STATE.laserAmmo).padStart(3, '0');
 
       playSoundFX('shoot');
@@ -1652,7 +1824,7 @@
       STATE.projectiles.push({
         mesh: boltMesh,
         angle: STATE.playerAngle,
-        speed: 15.0 // extremely rapid forward velocity
+        speed: 24.0 // hyper-arcade bolt velocity
       });
 
       // Muzzle flash point light intensity push
@@ -1670,7 +1842,9 @@
 
       animationFrameId = requestAnimationFrame(animate);
 
-      const delta = clock.getDelta();
+      // Cap dynamic physics frame deltas to protect systems in background (Edge Case 4)
+      const rawDelta = clock.getDelta();
+      const delta = Math.min(rawDelta, 0.1);
       
       // Frame rate independence multipliers (Edge Case 4 delta frames)
       const frameDelta = delta * 60.0; 
@@ -1702,15 +1876,34 @@
       // Merge steer angles into player rotation targets
       STATE.playerAngleTarget += steerAngle;
 
+      // Gravity Vortex hazard off-course vector pull
+      if (STATE.isVortexActive) {
+        const pullForce = 0.018 * frameDelta;
+        STATE.playerAngleTarget += (STATE.vortexTargetAngle - STATE.playerAngleTarget) * pullForce;
+      }
+
       // Smooth interpolation filter of banking angles
       STATE.playerAngle += (STATE.playerAngleTarget - STATE.playerAngle) * 0.15 * frameDelta;
       
-      // Lock target limits
-      STATE.playerAngle = THREE.MathUtils.clamp(STATE.playerAngle, -Math.PI * 0.95, Math.PI * 0.95);
+      // Endless 360-degree spiral rotation wrapping logic (no hard boundaries)
+      if (STATE.playerAngleTarget > Math.PI) {
+        STATE.playerAngleTarget -= Math.PI * 2;
+        STATE.playerAngle -= Math.PI * 2;
+      } else if (STATE.playerAngleTarget < -Math.PI) {
+        STATE.playerAngleTarget += Math.PI * 2;
+        STATE.playerAngle += Math.PI * 2;
+      }
 
       // Rotate player ship group relative to tunnel lane angle
       playerGroup.position.x = Math.sin(STATE.playerAngle) * (TUNNEL_RADIUS - 0.7);
       playerGroup.position.y = -Math.cos(STATE.playerAngle) * (TUNNEL_RADIUS - 0.7);
+
+      // Move pointLight dynamically to follow the player vessel for premium glossy reflections
+      if (pointLight) {
+        pointLight.position.x = playerGroup.position.x;
+        pointLight.position.y = playerGroup.position.y;
+        pointLight.position.z = playerGroup.position.z - 5;
+      }
       
       // Auto-align banking tilt angle matching steer velocity
       const shipBankAngle = (STATE.playerAngle - STATE.playerAngleTarget) * 0.45;
@@ -1791,13 +1984,34 @@
         starField.geometry.attributes.position.needsUpdate = true;
       }
 
-      // Update structural ribs scrolling down Z axis
+      // Update structural ribs scrolling down Z axis & decay stroboscopic beats
       STATE.ribs.forEach(rib => {
         rib.position.z += 3.5 * STATE.speedLevel * frameDelta;
         if (rib.position.z > 0) {
           rib.position.z = -TUNNEL_LENGTH;
         }
+        if (rib.material.opacity > 0.25) {
+          rib.material.opacity -= 0.035 * frameDelta;
+        }
+        if (rib.scale.x > 1.0) {
+          const nextScale = Math.max(1.0, rib.scale.x - 0.015 * frameDelta);
+          rib.scale.set(nextScale, nextScale, 1);
+        }
       });
+
+      // Opposing continuous tunnel cylinder rotations & opacity decay
+      if (STATE.innerMesh) {
+        STATE.innerMesh.rotation.z += 0.006 * frameDelta;
+        if (STATE.innerMesh.material.opacity > 0.08) {
+          STATE.innerMesh.material.opacity -= 0.005 * frameDelta;
+        }
+      }
+      if (STATE.outerMesh) {
+        STATE.outerMesh.rotation.z -= 0.004 * frameDelta;
+        if (STATE.outerMesh.material.opacity > 0.08) {
+          STATE.outerMesh.material.opacity -= 0.005 * frameDelta;
+        }
+      }
 
       // Render player exhaust glowing particles
       if (Math.random() < 0.65) {
@@ -1841,6 +2055,13 @@
           STATE.isControlsInverted = false;
         }
       }
+      if (STATE.isWeaponsCharged) {
+        STATE.weaponsChargedTime -= delta;
+        if (STATE.weaponsChargedTime <= 0) {
+          STATE.isWeaponsCharged = false;
+          document.getElementById('buff-banner').style.opacity = 0;
+        }
+      }
 
       // 6. Level Timer countdown loop
       STATE.levelTimeLeft = Math.max(0, STATE.levelTimeLeft - delta);
@@ -1871,18 +2092,15 @@
         obs.mesh.rotation.x += 0.015 * frameDelta;
         obs.mesh.rotation.y += 0.01 * frameDelta;
 
-        // Collision Check: Projectile vs Obstacle
+        // Collision Check: Projectile vs Obstacle (True 3D Euclidean Distance check)
         for (let j = STATE.projectiles.length - 1; j >= 0; j--) {
           const proj = STATE.projectiles[j];
-          const distZ = Math.abs(obs.mesh.position.z - proj.mesh.position.z);
+          const dx = obs.mesh.position.x - proj.mesh.position.x;
+          const dy = obs.mesh.position.y - proj.mesh.position.y;
+          const dz = obs.mesh.position.z - proj.mesh.position.z;
+          const dist = Math.sqrt(dx*dx + dy*dy + dz*dz);
           
-          if (distZ < 10) {
-            // Lane mapping collision vector checks
-            const obsAngle = obs.lane * LANE_ANGLE_STEP;
-            const projAngle = proj.angle;
-            const diffAngle = Math.abs(Math.atan2(Math.sin(obsAngle - projAngle), Math.cos(obsAngle - projAngle)));
-
-            if (diffAngle < 0.5) {
+          if (dist < 3.2) {
               // Hit obstacle!
               playSoundFX('hit');
               createNeonExplosion(obs.mesh.position, obs.mesh.material.color.getHex());
@@ -1907,18 +2125,15 @@
               }
             }
           }
-        }
-
-        // Check if obstacle is still active after projectile loop
         if (!STATE.obstacles[i]) continue;
 
-        // Collision Check: Obstacle vs Player Vessel
-        const distZ = Math.abs(obs.mesh.position.z - playerGroup.position.z);
-        if (distZ < 2.2) {
-          const obsAngle = obs.lane * LANE_ANGLE_STEP;
-          const diffAngle = Math.abs(Math.atan2(Math.sin(obsAngle - STATE.playerAngle), Math.cos(obsAngle - STATE.playerAngle)));
-
-          if (diffAngle < 0.6) {
+        // Collision Check: Obstacle vs Player Vessel (True 3D Euclidean Distance check)
+        const dx_player = obs.mesh.position.x - playerGroup.position.x;
+        const dy_player = obs.mesh.position.y - playerGroup.position.y;
+        const dz_player = obs.mesh.position.z - playerGroup.position.z;
+        const dist_player = Math.sqrt(dx_player*dx_player + dy_player*dy_player + dz_player*dz_player);
+        
+        if (dist_player < 2.8) {
             // Collision!
             if (STATE.isInvincible) {
               // Destroy obstacle on impact if invincible
@@ -1949,14 +2164,15 @@
               return;
             }
           }
-        }
 
-        // Near miss verification checks (Double Gate boundaries, Edge Case 8)
-        if (distZ < 4.0 && obs.mesh.position.z < playerGroup.position.z) {
-          const obsAngle = obs.lane * LANE_ANGLE_STEP;
-          const diffAngle = Math.abs(Math.atan2(Math.sin(obsAngle - STATE.playerAngle), Math.cos(obsAngle - STATE.playerAngle)));
+        // Near miss verification checks (True 3D Euclidean Distance check)
+        if (!obs.nearMissTriggered && obs.mesh.position.z < playerGroup.position.z) {
+          const dx_player = obs.mesh.position.x - playerGroup.position.x;
+          const dy_player = obs.mesh.position.y - playerGroup.position.y;
+          const dz_player = obs.mesh.position.z - playerGroup.position.z;
+          const dist_player = Math.sqrt(dx_player*dx_player + dy_player*dy_player + dz_player*dz_player);
 
-          if (!obs.nearMissTriggered && diffAngle < 0.65) {
+          if (dist_player < 5.2) {
             obs.nearMissTriggered = true;
             triggerNearMiss();
           }
@@ -1992,13 +2208,14 @@
         item.mesh.rotation.y += 0.02 * frameDelta;
         item.mesh.rotation.x += 0.01 * frameDelta;
 
-        // Collision Check: Item vs Player Vessel
-        const distZ = Math.abs(item.mesh.position.z - playerGroup.position.z);
-        if (distZ < 2.5) {
-          const itemAngle = item.lane * LANE_ANGLE_STEP;
-          const diffAngle = Math.abs(Math.atan2(Math.sin(itemAngle - STATE.playerAngle), Math.cos(itemAngle - STATE.playerAngle)));
+        // Collision Check: Item vs Player Vessel (True 3D Euclidean Distance check)
+        const dx_item = item.mesh.position.x - playerGroup.position.x;
+        const dy_item = item.mesh.position.y - playerGroup.position.y;
+        const dz_item = item.mesh.position.z - playerGroup.position.z;
+        const dist_item = Math.sqrt(dx_item*dx_item + dy_item*dy_item + dz_item*dz_item);
+        const collectionRadius = STATE.isMagnetActive ? 6.0 : 2.6;
 
-          if (diffAngle < 0.7 || STATE.isMagnetActive) {
+          if (dist_item < collectionRadius) {
             // Collected powerup/hazard!
             triggerItemCollection(item.type);
             
@@ -2009,7 +2226,6 @@
             STATE.powerups.splice(i, 1);
             continue;
           }
-        }
 
         // Clean up passed items
         if (item.mesh.position.z > 20) {
@@ -2025,6 +2241,47 @@
         pointLight.intensity -= 0.3 * frameDelta;
       }
 
+      // Camera Warp Speed FOV Zoom Zoom-out transition
+      const targetFov = STATE.boostActive ? 88 : 65;
+      if (Math.abs(camera.fov - targetFov) > 0.1) {
+        camera.fov += (targetFov - camera.fov) * 0.08 * frameDelta;
+        camera.updateProjectionMatrix();
+      }
+
+      // Dynamic Third-Person Camera Follow (Centering player ship, Edge Case 12 aspect)
+      const camRadius = TUNNEL_RADIUS - 4.5;
+      const targetCamX = Math.sin(STATE.playerAngle) * camRadius;
+      const targetCamY = -Math.cos(STATE.playerAngle) * camRadius;
+      const targetCamZ = 0; // Behind player at z = -10
+
+      // High-Fidelity camera shakes & thruster vibrations
+      let shakeAmt = STATE.cameraShake;
+      if (STATE.boostActive) {
+        shakeAmt += 0.035; // high-frequency engine vibration
+      }
+      let shakeX = 0, shakeY = 0, shakeZ = 0;
+      if (shakeAmt > 0.001) {
+        shakeX = (Math.random() - 0.5) * shakeAmt;
+        shakeY = (Math.random() - 0.5) * shakeAmt;
+        shakeZ = (Math.random() - 0.5) * shakeAmt;
+      }
+      camera.position.set(
+        targetCamX + shakeX,
+        targetCamY + shakeY,
+        targetCamZ + shakeZ
+      );
+
+      // Rotate camera up vector to point towards the center of the cylinder
+      camera.up.set(-Math.sin(STATE.playerAngle), Math.cos(STATE.playerAngle), 0);
+
+      // Make camera look forward along the active flight lane
+      const lookX = Math.sin(STATE.playerAngle) * (TUNNEL_RADIUS - 0.7);
+      const lookY = -Math.cos(STATE.playerAngle) * (TUNNEL_RADIUS - 0.7);
+      camera.lookAt(lookX, lookY, -60);
+      if (STATE.cameraShake > 0) {
+        STATE.cameraShake = Math.max(0, STATE.cameraShake - 0.12 * frameDelta);
+      }
+
       // Render Three.js passes
       composer.render();
     }
@@ -2038,38 +2295,45 @@
         document.getElementById('shards-value').innerText = String(STATE.neonShardsCount).padStart(3, '0');
         STATE.score += 100;
         playSoundFX('shards');
+        triggerScreenFlash('#ffdf00', 80);
       } 
       else if (type === 'shield') {
         STATE.shieldCapacity = Math.min(STATE.maxShieldCapacity, STATE.shieldCapacity + 1);
         updateShieldHUD();
         playSoundFX('shield_up');
+        triggerScreenFlash('#00f0ff', 150);
       }
       else if (type === 'boost_battery') {
         STATE.boostEnergy = Math.min(STATE.maxBoostEnergy, STATE.boostEnergy + 40);
         playSoundFX('shield_up');
+        triggerScreenFlash('#9d00ff', 150);
       }
       else if (type === 'blaster_ammo') {
         STATE.laserAmmo = Math.min(999, STATE.laserAmmo + 40);
         document.getElementById('ammo-value').innerText = String(STATE.laserAmmo).padStart(3, '0');
         playSoundFX('shards');
+        triggerScreenFlash('#39ff14', 150);
       }
       else if (type === 'invincibility') {
         STATE.isInvincible = true;
         STATE.invincibilityTime = 6.0; // 6 seconds
         showBuffBanner('INVINCIBLE', 'var(--cyan)');
         playSoundFX('shield_up');
+        triggerScreenFlash('#ffffff', 300);
       }
       else if (type === 'magnet') {
         STATE.isMagnetActive = true;
         STATE.magnetTime = 8.0;
         showBuffBanner('MAGNET ACTIVE', 'var(--yellow)');
         playSoundFX('shards');
+        triggerScreenFlash('#ff3131', 200);
       }
       else if (type === 'time_warp') {
         STATE.isTimeWarpActive = true;
         STATE.timeWarpTime = 6.0;
         showBuffBanner('TIME WARP SLOW', 'var(--green)');
         playSoundFX('shield_up');
+        triggerScreenFlash('#00ffff', 250);
       }
       else if (type === 'emp') {
         triggerEMPSchockwave();
@@ -2079,22 +2343,50 @@
         STATE.scoreSurgeTime = 8.0;
         showBuffBanner('SCORE SURGE x5', 'var(--magenta)');
         playSoundFX('shield_up');
+        triggerScreenFlash('#ff00ab', 250);
+      }
+      else if (type === 'weapons_charger') {
+        STATE.isWeaponsCharged = true;
+        STATE.weaponsChargedTime = 7.0; // 7 seconds
+        showBuffBanner('INFINITE AMMO', 'var(--green)');
+        playSoundFX('shield_up');
+        triggerScreenFlash('#39ff14', 250);
       }
       // Hazards (Only hit if NOT invincible/shielded)
       else if (!STATE.isInvincible) {
         if (type === 'hazard_glitch') {
           triggerGlitchStrobe();
+          triggerScreenFlash('#ff0000', 500);
         } 
         else if (type === 'hazard_invert') {
           STATE.isControlsInverted = true;
           STATE.controlsInvertedTime = 5.0;
           showBuffBanner('CONTROLS REVERSED', 'var(--red)');
           playSoundFX('glitch');
+          triggerScreenFlash('#ff3131', 300);
         } 
         else if (type === 'hazard_drain') {
           STATE.boostEnergy = 0;
           showBuffBanner('BATTERY CRITICAL', 'var(--red)');
           playSoundFX('hit');
+          triggerScreenFlash('#ff0000', 400);
+        }
+        else if (type === 'hazard_vortex') {
+          STATE.isVortexActive = true;
+          STATE.vortexTime = 4.5; // 4.5 seconds
+          STATE.vortexTargetAngle = (Math.random() - 0.5) * Math.PI * 1.5;
+          showBuffBanner('GRAVITY VORTEX', 'var(--yellow)');
+          playSoundFX('glitch');
+          triggerScreenFlash('#ffa500', 300);
+          STATE.cameraShake = 0.6;
+        }
+        else if (type === 'hazard_double_spawn') {
+          showBuffBanner('DOUBLE INCOMING WAVE', 'var(--red)');
+          playSoundFX('glitch');
+          triggerScreenFlash('#ff0055', 400);
+          STATE.cameraShake = 1.0;
+          setTimeout(() => { spawnObstacle(); }, 200);
+          setTimeout(() => { spawnObstacle(); }, 500);
         }
       }
     }
@@ -2105,6 +2397,17 @@
       banner.style.color = color;
       banner.style.textShadow = `0 0 10px ${color}`;
       banner.style.opacity = 1;
+    }
+
+    function triggerScreenFlash(colorHex, durationMs = 150) {
+      const overlay = document.getElementById('flash-overlay');
+      if (!overlay) return;
+      overlay.style.backgroundColor = colorHex;
+      overlay.style.opacity = '0.35';
+      overlay.style.transition = 'none';
+      overlay.offsetHeight; // trigger reflow
+      overlay.style.transition = `opacity ${durationMs}ms ease-out`;
+      overlay.style.opacity = '0';
     }
 
     function triggerEMPSchockwave() {
@@ -2125,6 +2428,8 @@
         pointLight.intensity = 45.0;
         pointLight.color.setHex(0xff00ff);
       }
+      STATE.cameraShake = 0.8;
+      triggerScreenFlash('#ff00ff', 400);
     }
 
     function triggerGlitchStrobe() {
@@ -2148,6 +2453,8 @@
         pointLight.color.setHex(0xff3131);
         pointLight.intensity = 25.0;
       }
+      STATE.cameraShake = 1.0;
+      triggerScreenFlash('#ff3131', 250);
     }
 
     function updateShieldHUD() {
@@ -2176,6 +2483,7 @@
       cancelAnimationFrame(animationFrameId);
       if (sequencerTimer) clearTimeout(sequencerTimer);
       pauseGame();
+      pauseBGM();
 
       // Display Upgrade Bay Overlay
       document.getElementById('hud').classList.add('hidden');
@@ -2186,6 +2494,7 @@
 
       // Update shop buy buttons states
       updateShopButtons();
+      resetMenuFocus();
     }
 
     function updateShopButtons() {
@@ -2274,8 +2583,10 @@
       STATE.currentLevel++;
       document.getElementById('level-title').innerText = `Level ${STATE.currentLevel}`;
       
-      // Decrement spawns checks for faster pace
-      STATE.spawnInterval = Math.max(22, 45 - STATE.currentLevel * 3);
+      playBGM();
+      
+      // Decrement spawns checks for faster pace (hyper-arcade aggressive progression down to 12 frames)
+      STATE.spawnInterval = Math.max(12, 38 - STATE.currentLevel * 4);
       STATE.levelTimeLeft = 30.0;
 
       // Sync shards counts back to active gameplay HUD
@@ -2423,6 +2734,7 @@
 
       // Stop audio scheduler loops
       pauseGame();
+      pauseBGM();
 
       // Lock cursor out on death
       document.exitPointerLock();
@@ -2443,6 +2755,7 @@
       document.getElementById('final-score').innerText = String(STATE.score).padStart(5, '0');
       document.getElementById('high-score').innerText = String(STATE.highScore).padStart(5, '0');
       document.getElementById('game-over-screen').classList.remove('hidden');
+      resetMenuFocus();
     }
 
     function resetGameState() {
@@ -2524,6 +2837,8 @@
       }
 
       STATE.mouseEnabled = document.getElementById('toggle-mouse').checked;
+      STATE.audioEnabled = document.getElementById('toggle-audio').checked;
+      playBGM();
 
       // Hide start screen overlay
       document.getElementById('start-screen').classList.add('hidden');
@@ -2546,6 +2861,8 @@
         audioCtx.resume();
       }
 
+      playBGM();
+
       document.getElementById('game-over-screen').classList.add('hidden');
       document.getElementById('hud').classList.remove('hidden');
       document.getElementById('keyboard-dashboard').classList.remove('hidden');
@@ -2561,8 +2878,115 @@
       startSynthSequencer();
     });
 
+    document.getElementById('btn-resume').addEventListener('click', () => {
+      togglePause();
+    });
+
     document.getElementById('btn-reload').addEventListener('click', () => {
       window.location.reload();
+    });
+
+    // ----------------------------------------------------
+    // KEYBOARD MENU NAVIGATION SYSTEM & WAREZ BGM AUDIO
+    // ----------------------------------------------------
+    let menuFocusIndex = 0;
+    let isBgmPlaying = false;
+
+    function getNavigableElements() {
+      const screens = [
+        { id: 'start-screen', selectors: ['#toggle-mouse', '#toggle-audio', '#btn-start'] },
+        { id: 'upgrade-screen', selectors: ['#buy-shield', '#buy-ammo', '#buy-boost', '#buy-blaster', '#btn-next-level'] },
+        { id: 'game-over-screen', selectors: ['#btn-restart'] },
+        { id: 'pause-screen', selectors: ['#btn-resume'] }
+      ];
+      for (const s of screens) {
+        const el = document.getElementById(s.id);
+        if (el && !el.classList.contains('hidden')) {
+          return s.selectors.map(sel => el.querySelector(sel)).filter(Boolean);
+        }
+      }
+      return [];
+    }
+
+    function updateMenuFocusVisuals(elements) {
+      document.querySelectorAll('.keyboard-focused').forEach(el => {
+        el.classList.remove('keyboard-focused');
+        el.blur();
+      });
+      if (elements.length > 0) {
+        if (menuFocusIndex < 0) menuFocusIndex = elements.length - 1;
+        if (menuFocusIndex >= elements.length) menuFocusIndex = 0;
+        const target = elements[menuFocusIndex];
+        if (target) {
+          target.classList.add('keyboard-focused');
+          target.focus();
+        }
+      }
+    }
+
+    function resetMenuFocus() {
+      const elements = getNavigableElements();
+      menuFocusIndex = elements.findIndex(el => el.tagName === 'BUTTON');
+      if (menuFocusIndex < 0) menuFocusIndex = 0;
+      updateMenuFocusVisuals(elements);
+    }
+
+    function isAnyMenuOpen() {
+      const ids = ['start-screen', 'upgrade-screen', 'game-over-screen', 'pause-screen'];
+      return ids.some(id => {
+        const el = document.getElementById(id);
+        return el && !el.classList.contains('hidden');
+      });
+    }
+
+    function playBGM() {
+      const bgm = document.getElementById('chiptune-music');
+      const audioToggle = document.getElementById('toggle-audio');
+      const audioEnabled = audioToggle ? audioToggle.checked : true;
+      if (!bgm || !audioEnabled) {
+        if (bgm) bgm.pause();
+        isBgmPlaying = false;
+        return;
+      }
+      bgm.volume = 0.45;
+      bgm.play()
+        .then(() => {
+          isBgmPlaying = true;
+        })
+        .catch(err => {
+          console.warn("Chiptune BGM failed to play, falling back to procedural synthesizer:", err);
+          isBgmPlaying = false;
+        });
+    }
+
+    function pauseBGM() {
+      const bgm = document.getElementById('chiptune-music');
+      if (bgm) bgm.pause();
+    }
+
+    // Add DOM event listeners for toggles
+    document.getElementById('toggle-audio').addEventListener('change', (e) => {
+      STATE.audioEnabled = e.target.checked;
+      if (STATE.audioEnabled) {
+        initAudio();
+        if (audioCtx && audioCtx.state === 'suspended') {
+          audioCtx.resume();
+        }
+        playBGM();
+      } else {
+        pauseBGM();
+      }
+    });
+
+    document.getElementById('toggle-mouse').addEventListener('change', (e) => {
+      STATE.mouseEnabled = e.target.checked;
+      if (STATE.isGameRunning) {
+        if (STATE.mouseEnabled) {
+          canvas.requestPointerLock();
+        } else {
+          document.exitPointerLock();
+        }
+      }
     });
 
     // ----------------------------------------------------
@@ -2570,6 +2994,42 @@
     // ----------------------------------------------------
     window.addEventListener('keydown', (e) => {
       const key = e.key.toLowerCase();
+      
+      // Keyboard menu navigation intercept
+      if (isAnyMenuOpen()) {
+        const elements = getNavigableElements();
+        if (elements.length > 0) {
+          if (key === 'arrowdown' || key === 's' || key === 'arrowright' || key === 'd') {
+            e.preventDefault();
+            menuFocusIndex++;
+            updateMenuFocusVisuals(elements);
+            playSoundFX('nearmiss');
+            return;
+          }
+          if (key === 'arrowup' || key === 'w' || key === 'arrowleft' || key === 'a') {
+            e.preventDefault();
+            menuFocusIndex--;
+            updateMenuFocusVisuals(elements);
+            playSoundFX('nearmiss');
+            return;
+          }
+          if (key === 'enter' || key === ' ') {
+            e.preventDefault();
+            const target = elements[menuFocusIndex];
+            if (target) {
+              if (target.tagName === 'INPUT' && target.type === 'checkbox') {
+                target.checked = !target.checked;
+                target.dispatchEvent(new Event('change'));
+                playSoundFX('upgrade');
+              } else {
+                target.click();
+              }
+            }
+            return;
+          }
+        }
+      }
+
       if (key === 'a' || key === 'arrowleft') keyMap.left = true;
       if (key === 'd' || key === 'arrowright') keyMap.right = true;
       if (key === 'shift') keyMap.boost = true;
@@ -2580,6 +3040,10 @@
           keyMap.shoot = true;
           fireBlaster();
         }
+      }
+      if (key === 'p' || e.key === 'Escape') {
+        e.preventDefault();
+        togglePause();
       }
     });
 
@@ -2618,28 +3082,22 @@
     // Tab background suspends (Edge Case 5 visibility loops)
     document.addEventListener('visibilitychange', () => {
       if (document.hidden) {
-        STATE.isGameRunning = false;
-        pauseGame();
+        if (STATE.isGameRunning) {
+          togglePause();
+        }
         // Flush inputs
         keyMap.left = false;
         keyMap.right = false;
         keyMap.boost = false;
         keyMap.shoot = false;
-      } else {
-        if (document.getElementById('start-screen').classList.contains('hidden') && 
-            document.getElementById('game-over-screen').classList.contains('hidden') &&
-            document.getElementById('upgrade-screen').classList.contains('hidden')) {
-          resumeGame();
-          clock.getDelta(); // Reset delta
-          STATE.isGameRunning = true;
-          animate();
-          startSynthSequencer();
-        }
       }
     });
 
     // Window focus loss flush registers (Edge Case 11)
     window.addEventListener('blur', () => {
+      if (STATE.isGameRunning) {
+        togglePause();
+      }
       keyMap.left = false;
       keyMap.right = false;
       keyMap.boost = false;
@@ -2649,6 +3107,7 @@
     // Boot Graphics Framework immediately on load
     window.addEventListener('load', () => {
       initThree();
+      resetMenuFocus();
     });
   </script>
 </body>

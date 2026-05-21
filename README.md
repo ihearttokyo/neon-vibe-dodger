@@ -10,7 +10,8 @@ A premium, high-fidelity 3D arcade dodging game inside a rotating cyber tunnel. 
 
 ### 1. Visual Splendor (Three.js WebGL)
 - **Rotating Double Tunnel**: Two rotating mesh wireframe cylinders rotating in opposite directions, creating a beautiful spatial paradox and an immersive sense of depth.
-- **Infinite Particle Starfield**: Over 600 custom neon-scattered points rushing toward the camera to simulate traveling at hyperspace speeds.
+- **Dynamic Camera FX**: Interactive camera perspective shakes upon collisions or EMP shocks, combined with high-frequency speed vibrations and an active FOV warp zoom on Shift Boosts.
+- **Stroboscopic Vector Beats**: Structural ribs and tunnel wireframes flash and cycle neon hues (magenta, cyan, pink, green, yellow) dynamically synchronized with audio synthesizer drum kick beats.
 - **Futuristic Crystal Vessel**: A multi-faceted glowing octahedron player ship that realistically banks, tilts, and spins as it maneuvers inside the tunnel.
 - **Wireframe Obstacles**: Spawning cylinders, prisms, and toruses in 8 radial coordinate tracks.
 
@@ -21,10 +22,24 @@ A premium, high-fidelity 3D arcade dodging game inside a rotating cyber tunnel. 
 - **Tempo Dynamic Acceleration**: The BPM of the procedural bassline automatically speeds up as your score increases, amplifying gaming tension.
 - **Synthesized Retro Sound FX**: Unique sound effects generated in real-time for near-miss bonuses, close dodges, and crashes.
 
-### 3. Visual Safety Harness & Options
-- **Strobe/Vibe Mode (Default)**: Full flashing lights sync'd to audio beats, camera shakes, and screen flashes.
-- **Safe Mode**: Disables intense strobe flashes, substituting them with smooth, gradual HSL color shifts.
-- **Control Modes**: Toggle between WASD/Arrow keys or pointer/mouse tracking inside the tunnel.
+### 3. Hyper-Arcade Pacing & Upgrades
+- **Snappy Blaster Arsenal**: Tapping spacebar or left-clicking fires glowing plasma projectiles. Trimmed rate-limit cooldown to `220ms` and rapid bullet velocity rewards rapid manual tapping.
+- **Glassmorphic Upgrade Bay**: Dynamic 30-second survival levels pauses and prompts the Upgrade Bay where you spend collected Neon Shards on blaster ammo, shields, and thruster recharge speeds.
+- **15 Powerups & Hazards**:
+  - *Shields* (glowing blue bubble)
+  - *Invincibility* (neon white strobe)
+  - *Speed Boosts* (green warp gates)
+  - *Neon Shards* (spinning yellow triangles)
+  - *Magnet* (pulls items)
+  - *Time Warp* (slows obstacles)
+  - *EMP Blast* (clears screen)
+  - *Score Surge* (x5 multiplier)
+  - *Weapons Charger* (temp infinite blaster ammo with double-torus green mesh)
+  - *Visual Glitch* (stroboscopic CRT red glitch overlay)
+  - *Controls Inverter* (temporarily reverses key directions)
+  - *Boost Drain* (instantly burns thruster battery)
+  - *Gravity Vortex* (orange ring pulling ship dynamically off-course)
+  - *Double Obstacles Gate* (pink-red block immediately spawning 2 additional waves)
 
 ---
 
@@ -46,20 +61,13 @@ This clone stands out by addressing 15 critical production edge cases:
 12. **Double-Click & Pinch Zoom Prevention**: Mapped `touch-action: none` and custom handlers to prevent mobile gestures from scaling the web page layout.
 13. **Local Storage Try-Catch**: Gracefully handles incognito browser settings by reverting to in-memory scores if `localStorage` throws an exception.
 14. **Audio Node Garbage Collection**: Explicitly stops and disconnects all transient oscillators to prevent massive browser audio memory leaks.
-15. **Interpolated Color Transitions**: Uses linear interpolation (`lerp`) for gradual, smooth lighting shifts when Safe Mode is enabled.
+15. **Full-Screen Stroboscopic Flash System**: Integrates low-latency color-dodge mix layers to flash translucent cyber hues on collections, damage, and synth kicks without lagging the canvas render thread.
 
 ---
 
 ## Running Locally
 
 Since the game is a single-file application, you can run it instantly using any static server.
-
-### Option 1: Python Static Server
-Run this inside the directory:
-```bash
-python3 -m http.server 8000
-```
-Then navigate to: `http://localhost:8000`
 
 ### Option 2: Live HTML
 Just double-click the `index.html` file to open it in any modern browser!
