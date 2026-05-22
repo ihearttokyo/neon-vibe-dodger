@@ -1,0 +1,22 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.py.bak
+generate_index.py.bak
+
+# macOS / System
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Swift Package Manager (SPM)
+.build/
+Packages/
+.swiftpm/
+
+# Compiled Application Bundles
+*.app
+*.zip
