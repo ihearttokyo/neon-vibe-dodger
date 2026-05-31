@@ -1,4 +1,4 @@
-# NEON VIBE: CYBER RUNNER 🌌
+# NEON VIBE: CYBER RUNNER v0.0.1-alpha 🌌
 
 A premium, high-fidelity 3D arcade dodging game inside a rotating cyber tunnel. Built as a self-contained HTML/Three.js experience and containerized inside a **native macOS desktop application** via SwiftUI + WKWebView. 
 
